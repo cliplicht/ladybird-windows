@@ -4,6 +4,7 @@
         src/win_eventloop.cpp
         src/win_timers.cpp
         src/win_fs.cpp
+        src/win_tasks.cpp
 )
 
 target_include_directories(ladybird_platform_windows PUBLIC include)

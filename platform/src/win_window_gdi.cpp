@@ -2,7 +2,7 @@
 #include <string>
 
 // --- simple UTF-8 -> UTF-16 helper ---
-static std::wstring utf8_to_wide(const char* s) {
+static std::wstring utf8_to_wide(const char *s) {
     if (!s) return {};
     int lenW = MultiByteToWideChar(CP_UTF8, 0, s, -1, nullptr, 0);
     std::wstring w(lenW > 0 ? lenW : 0, L'\0');
@@ -15,6 +15,16 @@ static std::wstring utf8_to_wide(const char* s) {
         }
     }
     return w;
+}
+
+static UINT get_dpi_for_windows(HWND h) {
+    HMODULE user32 = GetModuleHandleW(L"user32.dll");
+    if (user32) {
+        using GetDpiForWindowFn = UINT (WINAPI*)(HWND);
+        auto fn = reinterpret_cast<GetDpiForWindowFn>(GetProcAddress(user32, "GetDpiForWindow"));
+        if (fn) return fn(h);
+    }
+    return 96;
 }
 
 // --- lb_window type expected by the header ---
@@ -33,16 +43,16 @@ static ATOM ensure_class(HINSTANCE hInst) {
     WNDCLASSW wc{};
     wc.lpfnWndProc = [](HWND h, UINT m, WPARAM w, LPARAM l) -> LRESULT {
         if (m == WM_NCCREATE) {
-            auto cs = reinterpret_cast<CREATESTRUCTW*>(l);
+            auto cs = reinterpret_cast<CREATESTRUCTW *>(l);
             SetWindowLongPtrW(h, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(cs->lpCreateParams));
         }
-        auto* win = reinterpret_cast<lb_window*>(GetWindowLongPtrW(h, GWLP_USERDATA));
+        auto *win = reinterpret_cast<lb_window *>(GetWindowLongPtrW(h, GWLP_USERDATA));
         switch (m) {
             case WM_SIZE:
                 if (win) {
-                    win->width  = LOWORD(l);
+                    win->width = LOWORD(l);
                     win->height = HIWORD(l);
-                    win->bmi.bmiHeader.biWidth  = win->width;
+                    win->bmi.bmiHeader.biWidth = win->width;
                     win->bmi.bmiHeader.biHeight = -win->height; // top-down
                 }
                 return 0;
@@ -52,6 +62,14 @@ static ATOM ensure_class(HINSTANCE hInst) {
                 return 0;
             case WM_DESTROY:
                 PostQuitMessage(0);
+                return 0;
+            case WM_DPICHANGED:
+                const RECT *suggested = reinterpret_cast<RECT *>(l);
+                SetWindowPos(h, nullptr,
+                             suggested->left, suggested->top,
+                             suggested->right - suggested->left,
+                             suggested->bottom - suggested->top,
+                             SWP_NOZORDER | SWP_NOACTIVATE);
                 return 0;
         }
         return DefWindowProcW(h, m, w, l);
@@ -63,12 +81,13 @@ static ATOM ensure_class(HINSTANCE hInst) {
     return atom;
 }
 
-extern "C" lb_window* win_create_impl(int w, int h, const char* title_utf8) {
+extern "C" lb_window *win_create_impl(int w, int h, const char *title_utf8) {
     HINSTANCE hInst = GetModuleHandleW(nullptr);
     if (!ensure_class(hInst)) return nullptr;
 
-    auto* win = new lb_window{};
-    win->width = w; win->height = h;
+    auto *win = new lb_window{};
+    win->width = w;
+    win->height = h;
 
     // init BITMAPINFO for RGBA8 top-down
     win->bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
@@ -86,25 +105,34 @@ extern "C" lb_window* win_create_impl(int w, int h, const char* title_utf8) {
         CW_USEDEFAULT, CW_USEDEFAULT, w, h,
         nullptr, nullptr, hInst, win
     );
-    if (!hwnd) { delete win; return nullptr; }
+
+    const UINT dpi = get_dpi_for_windows(hwnd);
+    float scale = dpi / 96.0f;
+    SetWindowPos(hwnd, nullptr, 0, 0,
+                 int(w * scale), int(h * scale), SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+
+    if (!hwnd) {
+        delete win;
+        return nullptr;
+    }
     win->hwnd = hwnd;
     return win;
 }
 
-extern "C" void win_destroy_impl(lb_window* w) {
+extern "C" void win_destroy_impl(lb_window *w) {
     if (!w) return;
     if (w->hwnd) DestroyWindow(w->hwnd);
     delete w;
 }
 
-extern "C" void win_present_rgba8_impl(lb_window* w, const void* pixels, int pw, int ph, int stride) {
+extern "C" void win_present_rgba8_impl(lb_window *w, const void *pixels, int pw, int ph, int stride) {
     if (!w || !w->hwnd || !pixels) return;
     HDC hdc = GetDC(w->hwnd);
     // Target dimensions: window size (w->width/height), source dimensions: buffer (pw/ph)
     StretchDIBits(
         hdc,
-        0, 0, w->width, w->height,      // dst
-        0, 0, pw, ph,                   // src
+        0, 0, w->width, w->height, // dst
+        0, 0, pw, ph, // src
         pixels,
         &w->bmi,
         DIB_RGB_COLORS,

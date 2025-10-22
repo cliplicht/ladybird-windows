@@ -28,6 +28,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
     auto *win = plat.win_create(800, 600, "Ladybird Windows — Layer PoC");
 
+    if (plat.post_task) {
+        plat.post_task(+[](void *p) {
+
+            auto* win = static_cast<LB_PlatformV1::lb_window *>(p);
+
+        }, win);
+    }
+
     // Dummy RGBA buffer used once for this PoC
     const int W = 800, H = 600, Stride = W * 4;
     static unsigned char pixels[800 * 600 * 4];
