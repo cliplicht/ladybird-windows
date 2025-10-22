@@ -23,7 +23,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # MSVC environment (provides Windows SDK + lib paths)
+      # MSVC environment (Windows SDK + lib paths)
       - name: MSVC env
         uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -32,7 +32,7 @@ jobs:
       - name: Install Ninja
         uses: seanmiddleditch/gha-setup-ninja@v4
 
-      # LLVM/Clang-CL 21+ is required for MSVC STL v14.44 (avoids STL1000)
+      # LLVM/Clang-CL >=19 required by MSVC STL v14.44 (use 21 to match local)
       - name: Install LLVM
         uses: KyleMayes/install-llvm-action@v2.0.8
         with:
@@ -52,15 +52,21 @@ jobs:
       - name: Configure (${{ matrix.config }})
         run: cmake --preset ${{ matrix.configure_preset }}
 
-      # Verify that clang-cl is really used (guard against defaulting to cl.exe)
+      # Guard: ensure clang-cl is actually selected
       - name: Verify compiler selection
+        shell: pwsh
         run: |
-          cmake -LA -N out/build/${{ matrix.configure_preset }} | findstr CMAKE_CXX_COMPILER
-          cmake -LA -N out/build/${{ matrix.configure_preset }} | findstr CMAKE_C_COMPILER
+          $vars = cmake -LA -N "out/build/${{ matrix.configure_preset }}"
+          $cxx = ($vars | Select-String 'CMAKE_CXX_COMPILER:.*').ToString()
+          Write-Host "CMAKE_CXX_COMPILER => $cxx"
+          if ($cxx -notmatch 'clang-cl\.exe') {
+            Write-Error "CMAKE_CXX_COMPILER is not clang-cl.exe"
+            exit 1
+          }
 
       # Build with presets (Ninja)
       - name: Build (${{ matrix.config }})
-        run: cmake --build --preset ${{ matrix.build_preset }} --config ${{ matrix.config }} -j 4
+        run: cmake --build --preset ${{ matrix.build_preset }}
 
       # Package artifacts (EXE + DLL + LIB) and create checksums
       - name: Package artifacts
@@ -68,9 +74,7 @@ jobs:
           New-Item -Force -ItemType Directory artifact | Out-Null
           Copy-Item out\build\${{ matrix.configure_preset }}\bin\lbw_bootstrap.exe artifact\
           Copy-Item out\build\${{ matrix.configure_preset }}\bin\ladybird_platform_windows.dll artifact\
-          Copy-Item out\build\${{ matrix.configure_preset }}\bin\ladybird_platform_windows.lib artifact\
-
-          # SHA256 checksums for integrity
+          Copy-Item out\build\${{ matrix.configure_preset }}\lib\ladybird_platform_windows.lib artifact\
           Get-FileHash artifact\lbw_bootstrap.exe -Algorithm SHA256 | ForEach-Object { $_.Hash + " *lbw_bootstrap.exe" } | Out-File artifact\SHA256SUMS.txt -Encoding ascii
           Get-FileHash artifact\ladybird_platform_windows.dll -Algorithm SHA256 | ForEach-Object { $_.Hash + " *ladybird_platform_windows.dll" } | Add-Content artifact\SHA256SUMS.txt -Encoding ascii
           Get-FileHash artifact\ladybird_platform_windows.lib -Algorithm SHA256 | ForEach-Object { $_.Hash + " *ladybird_platform_windows.lib" } | Add-Content artifact\SHA256SUMS.txt -Encoding ascii
@@ -80,3 +84,4 @@ jobs:
         with:
           name: lbw-${{ matrix.config }}-windows
           path: artifact
+          retention-days: 14

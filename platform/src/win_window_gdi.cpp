@@ -5,8 +5,15 @@
 static std::wstring utf8_to_wide(const char* s) {
     if (!s) return {};
     int lenW = MultiByteToWideChar(CP_UTF8, 0, s, -1, nullptr, 0);
-    std::wstring w(lenW ? lenW - 1 : 0, L'\0');
-    if (lenW > 1) MultiByteToWideChar(CP_UTF8, 0, s, -1, w.data(), lenW);
+    std::wstring w(lenW > 0 ? lenW : 0, L'\0');
+    if (lenW > 0) {
+        int written = MultiByteToWideChar(CP_UTF8, 0, s, -1, w.data(), lenW);
+        if (written > 0) {
+            w.resize(written - 1); // drop the terminating null
+        } else {
+            w.clear();
+        }
+    }
     return w;
 }
 
