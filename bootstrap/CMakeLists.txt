@@ -1,7 +1,7 @@
 ﻿add_executable(lbw_bootstrap main_win.cpp)
 
 target_include_directories(lbw_bootstrap PRIVATE
-        ${CMAKE_SOURCE_DIR}/platform/include
+        ${CMAKE_SOURCE_DIR}/platform/core/include
 )
 
 target_link_libraries(lbw_bootstrap PRIVATE user32 gdi32)
