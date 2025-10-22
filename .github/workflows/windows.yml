@@ -1,0 +1,41 @@
+﻿name: Windows (clang-cl + Ninja)
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: MSVC env
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v4
+
+      - name: Install LLVM (clang-cl, lld, lldb)
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "17"
+
+      - name: Configure (Debug)
+        run: cmake --preset win-clangcl-debug
+
+      - name: Build (Debug)
+        run: cmake --build --preset build-debug --config Debug -j 4
+
+      - name: Package artifacts
+        run: |
+          mkdir artifact
+          copy out\build\win-clangcl-debug\bin\lbw_bootstrap.exe artifact\
+          copy out\build\win-clangcl-debug\bin\ladybird_platform_windows.dll artifact\
+          copy out\build\win-clangcl-debug\bin\ladybird_platform_windows.lib artifact\
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lbw-debug-windows
+          path: artifact
