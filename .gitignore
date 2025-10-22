@@ -1,0 +1,44 @@
+# CLion / CMake
+cmake-build-*/
+out/
+.idea/
+CMakeUserPresets.json
+
+# Build directories
+build/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# Visual Studio artifacts
+*.sln
+*.vcxproj*
+*.filters
+*.opensdf
+*.sdf
+*.vc.db
+
+# Windows
+*.exe
+*.dll
+*.pdb
+*.lib
+*.obj
+*.log
+
+# IDE settings
+.vs/
+.vscode/
+
+# Temporary files
+*.tmp
+*.cache
+*.user
+
+# OS files
+Thumbs.db
+Desktop.ini
